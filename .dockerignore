@@ -1,0 +1,7 @@
+*.pdf
+*.tex
+*.txt
+!requirements.txt
+__pycache__/**
+*.env
+.venv/**

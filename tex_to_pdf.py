@@ -17,13 +17,13 @@ def compile_latex_to_pdf(file_name):
     # ])
 
     step = subprocess.run([
-        LATEXMK_PATH,
+        shutil.which("latexmk") or LATEXMK_PATH,
         "-C",
         file_name
     ])
 
     result = subprocess.run([
-        LATEXMK_PATH,
+        shutil.which("latexmk") or LATEXMK_PATH,
         "-pdf",
         "-interaction=nonstopmode",
         "-file-line-error",

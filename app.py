@@ -3,6 +3,9 @@ import os
 import deconstruct_jd
 from user_form import render_profile_tab 
 import user_form
+import career_dairy
+import job_tracker
+import imap_gmail
 
 def init_session_state():
     if "extracted_criteria" not in st.session_state:
@@ -25,6 +28,8 @@ def init_session_state():
             st.session_state.latex_code = ""
     if "user_profile" not in st.session_state:
         user_form.init_session_state()
+    if "job_application_status" not in st.session_state:
+        job_tracker.init_session_state()
 
 
 def generate_resume(jd_text:str, ats_system:str, user_profile: dict = None):
@@ -55,7 +60,13 @@ def main():
     st.title("Job Resume Generator")
     st.caption("Create an ideal candidate")
 
-    tab_generate, tab_profile = st.tabs(["Generate Resume","Profile"])
+    total_applied, in_interviews, offers, rejected = st.columns(4)
+    total_applied.metric("Total Applied", len(st.session_state.job_application_status))
+    in_interviews.metric("In Interviews", len([v for v in st.session_state.job_application_status.values() if isinstance(v, dict) and v.get("status") == "Interviewing"]))
+    offers.metric("Offers Received", len([v for v in st.session_state.job_application_status.values() if isinstance(v, dict) and v.get("status") == "Offer Received"]))
+    rejected.metric("Rejected", len([v for v in st.session_state.job_application_status.values() if isinstance(v, dict) and v.get("status") == "Rejected"]))
+
+    tab_generate, tab_profile, tab_dairy, tab_tracker, tab_sync_gmail = st.tabs(["Generate Resume","Profile","Dairy","Tracker","Sync Gmail"])
     with tab_generate:
 
         col_input , col_output = st.columns([1,1],gap="medium")
@@ -92,7 +103,7 @@ def main():
                 st.download_button(
                     label="Download",
                     data=st.session_state.generated_pdf,
-                    file_name="new_id_resume.pdf",
+                    file_name=deconstruct_jd.generate_resume_filename,
                     mime="application/pdf",
                     type='primary',
                     use_container_width=True)
@@ -102,21 +113,26 @@ def main():
             tab_preview, tab_latex = st.tabs(["Extracted Criteria","latex preview"])
 
             with tab_preview:
-                st.markdown("###Job Criteria")
+                st.markdown("### Job Criteria")
                 if st.session_state.extracted_criteria:
                     st.markdown(st.session_state.extracted_criteria)
                 else:
                     st.caption("No Criteria was extracted")
 
             with tab_latex:
-                st.markdown("##Latex Code")
+                st.markdown("### Latex Code")
                 if st.session_state.latex_code:
                     st.code(st.session_state.latex_code)
                 else:
                     st.caption("No latex code generated")
     with tab_profile:
         render_profile_tab()
-
+    with tab_dairy:
+        career_dairy.render_dairy_tab()
+    with tab_tracker:
+        job_tracker.render_tracker_tab()
+    with tab_sync_gmail:
+        imap_gmail.render_sync_gmail()
 
 if __name__ == "__main__":
     main()

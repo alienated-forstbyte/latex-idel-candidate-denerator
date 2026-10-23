@@ -108,9 +108,9 @@ Analyze this job description and extract:
 Job Description:
 {content}
 """
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt
+        response = generate_content_with_fallback(
+            contents=prompt,
+            preferred_model=model
         )
 
         with open("extracted_jd.txt", mode = "w", encoding="utf-8") as f:
@@ -150,6 +150,10 @@ Education: {user_profile.get("education", "")}
 SYNTHETIC CANDIDATE MODE:
 Generate a 10/10 ideal candidate profile matching the target job description.
 DYNAMIC DOMAINS: Invent realistic, varied company names and technical projects that reflect the target industry (e.g., FinTech, Cloud SaaS, Healthcare), avoiding repetitive placeholder names.
+SYNTHETIC CANDIDATE DOMAIN DIVERSITY:
+1. Deduce the target industry from the Job Criteria (e.g., FinTech, HealthTech, CyberSecurity, E-Commerce, Autonomous Robotics).
+2. Invent 2-3 realistic, distinguished company names that reflect that specific industry (e.g., 'Aura Payments Group', 'Helix Clinical AI').
+3. STRICT PROHIBITION: Do NOT use generic placeholder names like 'Tech Solutions Inc.', 'Cloud Systems Corp', 'Acme Corp', or 'Software LLC'.
 """
 
     return f"""
@@ -173,10 +177,11 @@ def generate_resume(model, ats_system, user_profile):
     with open('extracted_jd.txt', mode='r', encoding='utf-8') as e:
         criteria = e.read()
         prompt = build_prompt(criteria, ats_system, user_profile)
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt
-        )
+        response = generate_content_with_fallback(contents=prompt,preferred_model=model)
+        # response = client.models.generate_content(
+        #     model=model,
+        #     contents=prompt
+        # )
 
         with open('new_resume.tex',mode='w',encoding='utf-8') as r:
             latex_code = response.text
@@ -189,28 +194,79 @@ def generate_resume(model, ats_system, user_profile):
 
 def sanitize_filename(filename: str) -> str:
     """
-    Sanitize the filename by removing or replacing invalid characters.
+    Sanitize filename components by removing illegal filesystem characters
+    and collapsing multiple spaces into underscores.
     """
-    invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
-    for char in invalid_chars:
-        filename = filename.replace(char, '_')
-    return filename.strip()
-def generate_resume_filename(candidate_name:str, job_title: str, company: str, ats_type: str ) -> str:
-    resume_name = '_'.join([candidate_name,job_title,company,ats_type])
-    return resume_name
+    if not filename:
+        return ""
+    cleaned = re.sub(r'[^\w\s-]', '', str(filename))
+    return re.sub(r'\s+', '_', cleaned.strip())
 
-print("Available Models"),
+def extract_job_title(criteria_text: str) -> str:
+    """
+    Extract the job title from the LLM-analyzed criteria text.
+    """
+    if not criteria_text:
+        return ""
+    match = re.search(r"Job Title[\*\:]*\s*[\n:]+\s*([^\n\*\#]+)", criteria_text, re.IGNORECASE)
+    if match:
+        title = match.group(1).replace("*", "").strip()
+        return title[:50].strip()
+    return ""
+
+def generate_resume_filename(candidate_name: str = "", job_title: str = "", company: str = "", ats_type: str = "") -> str:
+    """
+    Assemble an ATS-friendly, standardized resume filename:
+    {Candidate_Name}_{Job_Title}_{Company}_{ATS}_Resume.pdf
+    """
+    parts = []
+    
+    clean_name = sanitize_filename(candidate_name)
+    if clean_name:
+        parts.append(clean_name)
+    else:
+        parts.append("Candidate")
+        
+    clean_title = sanitize_filename(job_title)
+    if clean_title:
+        parts.append(clean_title)
+        
+    clean_company = sanitize_filename(company)
+    if clean_company:
+        parts.append(clean_company)
+        
+    clean_ats = sanitize_filename(ats_type)
+    if clean_ats:
+        parts.append(clean_ats)
+        
+    parts.append("Resume")
+    return "_".join(parts) + ".pdf"
+
+print("Available Models")
 def pipeline(ats_system:str, user_profile: dict = None):
     client = genai.Client(api_key=GCP_API_KEY)
+
+    success = False
+    last_error = None
+
     for m in client.models.list():
         if "generateContent" in (m.supported_actions or []): 
             print(f" -> {m.name}")
             try:
                 get_response(m.name)
-                print("Resulted")
                 generate_resume(m.name, ats_system, user_profile)
-                print("Done")
-                break
+                if os.path.exists('new_resume.pdf'):
+                    success = True
+                    break
+                else:
+                    raise RuntimeError("LaTeX compilation failed to produce new_resume.pdf")
             except Exception as e:
-                print(e)
+                last_error = e
+                print(f"[Model Failover] Model {m.name} failed: {e}")
                 continue
+    if not success:
+        error_msg = f"Failed to generate resume across all available models. Last error: {last_error}"
+        if last_error:
+            raise RuntimeError(error_msg) from last_error
+        else:
+            raise RuntimeError(error_msg)

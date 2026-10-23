@@ -3,7 +3,7 @@ import os
 import deconstruct_jd
 from user_form import render_profile_tab 
 import user_form
-import career_dairy
+import career_diary
 import job_tracker
 import imap_gmail
 
@@ -31,10 +31,23 @@ def init_session_state():
     if "job_application_status" not in st.session_state:
         job_tracker.init_session_state()
 
+def purge_generation_artifacts(artifact_list):
+    for artifacts in artifact_list:
+        if os.path.exists(artifacts):
+            try:
+                os.remove(artifacts)
+            except OSError:
+                pass
 
 def generate_resume(jd_text:str, ats_system:str, user_profile: dict = None):
+    artifact_list = ["new_resume.pdf", "new_resume.tex", "extracted_jd.txt"]
+    st.session_state.generated_pdf = None
+    st.session_state.latex_code = ""
+    st.session_state.extracted_criteria = ""
+    purge_generation_artifacts(artifact_list)
     with open('JD.txt',mode='w',encoding='utf-8') as f:
         f.write(jd_text)
+    
     deconstruct_jd.pipeline(ats_system, user_profile)
 
     if os.path.exists("extracted_jd.txt"):
@@ -45,7 +58,9 @@ def generate_resume(jd_text:str, ats_system:str, user_profile: dict = None):
         with open('new_resume.tex',mode='r',encoding='utf-8') as f:
             st.session_state.latex_code = f.read()
 
-    if os.path.exists('new_resume.pdf'):
+    if not os.path.exists('new_resume.pdf'):
+        raise RuntimeError("Resume generation failed. Check the logs")
+    else:
         with open('new_resume.pdf',mode='rb') as f:
             st.session_state.generated_pdf = f.read()
 
@@ -66,7 +81,7 @@ def main():
     offers.metric("Offers Received", len([v for v in st.session_state.job_application_status.values() if isinstance(v, dict) and v.get("status") == "Offer Received"]))
     rejected.metric("Rejected", len([v for v in st.session_state.job_application_status.values() if isinstance(v, dict) and v.get("status") == "Rejected"]))
 
-    tab_generate, tab_profile, tab_dairy, tab_tracker, tab_sync_gmail = st.tabs(["Generate Resume","Profile","Dairy","Tracker","Sync Gmail"])
+    tab_generate, tab_profile, tab_diary, tab_tracker, tab_sync_gmail = st.tabs(["Generate Resume","Profile","Diary","Tracker","Sync Gmail"])
     with tab_generate:
 
         col_input , col_output = st.columns([1,1],gap="medium")
@@ -79,7 +94,7 @@ def main():
 
             jd_input = st.text_area("Job Description",default_jd,400,placeholder="Paste JD here")
 
-            ats_systems = ["Workday","Greenhouse","Lever","iCIMS","SmartRecruiters","Jobvite","BambooHR","JazzHR","Bullhorn","SAP SuccessFactors","Oracle Taleo","ADP Recruiting Management","ClearCompany","CATS","ApplicantPro","Zoho Recruit","Recruitee","Breezy HR","Hireology","Avature","Recruiterbox","PeopleFluent","PCRecruiter","JobDiva","Vincere","TrackerRMS","Manatal","Freshteam","Teamtailor","Workable","Recruitee","SmartRecruiters","JazzHR","Breezy HR","Zoho Recruit","CATS","ClearCompany","iCIMS","Bullhorn","Greenhouse","Lever","BambooHR","Jobvite","SAP SuccessFactors","Oracle Taleo","ADP Recruiting Management","ApplicantPro","Recruitee","Hireology","Avature","Recruiterbox","PeopleFluent","PCRecruiter","JobDiva","Vincere","TrackerRMS","Manatal","Freshteam","Teamtailor","Generic"]
+            ats_systems = ["Workday","Greenhouse","Lever","Generic"]
             ats_system = st.selectbox("Select ATS System",ats_systems)
 
             mode_toggle = st.toggle("Profile",value=True,key="user_profile_toggle")
@@ -100,10 +115,27 @@ def main():
         with col_output:
             st.subheader("benchmark")
             if st.session_state.generated_pdf:
+                candidate_name = st.session_state.user_profile.get("name", "").strip() if mode_toggle else "Benchmark"
+                job_title = deconstruct_jd.extract_job_title(st.session_state.extracted_criteria)
+                suggested_filename = deconstruct_jd.generate_resume_filename(
+                    candidate_name=candidate_name,
+                    job_title=job_title,
+                    ats_type=ats_system
+                )
+
+                download_filename = st.text_input(
+                    "Download File Name",
+                    value=suggested_filename,
+                    help="Review or customize your resume file name before downloading."
+                )
+
+                if not download_filename.strip().lower().endswith(".pdf"):
+                    download_filename = f"{download_filename.strip()}.pdf"
+
                 st.download_button(
                     label="Download",
                     data=st.session_state.generated_pdf,
-                    file_name=deconstruct_jd.generate_resume_filename,
+                    file_name=download_filename,
                     mime="application/pdf",
                     type='primary',
                     use_container_width=True)
@@ -127,8 +159,8 @@ def main():
                     st.caption("No latex code generated")
     with tab_profile:
         render_profile_tab()
-    with tab_dairy:
-        career_dairy.render_dairy_tab()
+    with tab_diary:
+        career_diary.render_diary_tab()
     with tab_tracker:
         job_tracker.render_tracker_tab()
     with tab_sync_gmail:

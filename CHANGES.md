@@ -91,5 +91,20 @@ This document records the architectural improvements, bug fixes, and feature int
     2. Lightweight structured LLM classifier to filter out job recommendation digests, talent newsletters, and promotional spam before invoking the deep application extractor.
   * Added UI audit / noise metrics tracking so filtered emails can be inspected without polluting active application records.
 
+---
+
+## 8. Feature 13: Dynamic & Configurable Resume File Naming (`deconstruct_jd.py`, `app.py`)
+
+* **Sanitization Engine (`deconstruct_jd.sanitize_filename`):**
+  * Implemented regex stripping of illegal filesystem characters across OS platforms and whitespace collapsing into clean underscores.
+* **Metadata Extraction (`deconstruct_jd.extract_job_title`):**
+  * Extracts target job title directly from analyzed criteria markdown (`**1. Job Title** ...`).
+* **Dynamic Filename Synthesis (`deconstruct_jd.generate_resume_filename`):**
+  * Assembles `{Candidate_Name}_{Job_Title}_{Company}_{ATS}_Resume.pdf` with graceful fallbacks (e.g. `Benchmark_{Title}_{ATS}_Resume.pdf` when Profile mode is disabled).
+* **Interactive UI Preview & Override (`app.py`):**
+  * Added `st.text_input` in `col_output` allowing the candidate to review and customize the filename before downloading.
+  * Automatically guarantees `.pdf` extension is preserved and binds custom filename directly to `st.download_button`.
+
+
 
 

@@ -2,16 +2,18 @@ import os
 import streamlit as st
 import json
 import deconstruct_jd
-from user_form import render_profile_tab   
+from user_form import render_profile_tab
+import datetime  
 
-def load_dairy_entries(file_path: str = 'diary_entries.json'):
+
+def load_diary_entries(file_path: str = 'diary_entries.json'):
     if os.path.exists(file_path):
         with open(file_path, mode='r', encoding='utf-8') as f:
             return json.load(f)
     else:
         return []
 
-def save_dairy_entries(entries: list, file_path: str = 'diary_entries.json'):
+def save_diary_entries(entries: list, file_path: str = 'diary_entries.json'):
     with open(file_path, mode='w', encoding='utf-8') as f:
         json.dump(entries, f, indent=4)
 
@@ -35,15 +37,17 @@ def sync_bullets_to_user_profile(entries: list, user_profile: dict):
     with open('user_profile.json', mode='w', encoding='utf-8') as f:
         json.dump(user_profile, f, indent=4)
         st.toast("Diary entries synced to user profile successfully!")
+def normalize_entry(entry: dict | str) -> dict:
+    
 
-def render_dairy_tab():
+def render_diary_tab():
     st.markdown("### Career Diary")
-    entries = load_dairy_entries()
+    entries = load_diary_entries()
     new_entry = st.text_area("Add a new diary entry", "")
     if st.button("Add Entry"):
         if new_entry.strip():
             entries.append(new_entry.strip())
-            save_dairy_entries(entries)
+            save_diary_entries(entries)
             st.toast("Entry added successfully!")
         else:
             st.warning("Please enter a valid diary entry.")

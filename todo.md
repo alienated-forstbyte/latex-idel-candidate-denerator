@@ -85,15 +85,22 @@ This document tracks all planned features, technical requirements, and architect
 ---
 
 ### Feature 6: Docker Containerization & Cloud Deployment
-* **Status:** Completed
-* **Objective:** Containerize the entire application into a self-contained, reproducible Docker image with all system binaries (Python, Streamlit, TeX Live / `latexmk`).
+* **Status:** In Backlog / Pending Containerization
+* **Objective:** Containerize the entire application into a reproducible, production-grade Docker image with all system binaries (Python, Streamlit, TeX Live / `latexmk`).
 * **Core Capabilities:**
-  * **Multi-Stage `Dockerfile`:**
-    * Base Linux image with Python 3.11+.
+  * **Optimized `Dockerfile`:**
+    * Base Linux image with Python 3.11/3.12 slim.
     * Headless TeX Live distribution (`texlive-latex-base`, `texlive-latex-extra`, `latexmk`) pre-installed.
-    * Python virtual environment with all required dependencies (`streamlit`, `google-genai`, etc.).
-  * **`docker-compose.yml`:** Single-command local startup (`docker-compose up`) exposing port 8501.
-  * **Cloud Run Ready:** Configured for scale-to-zero serverless deployment on Google Cloud Run.
+    * Cached dependency installation via `requirements.txt`.
+  * **`docker-compose.yml`:**
+    * Single-command local startup (`docker-compose up`) exposing port 8501.
+    * Environment file forwarding (`.env` for `GCP_API_KEY`, `GMAIL_USER`, etc.).
+    * Persistent volume mounts for data vaults (`user_profile.json`, `job_application_status.json`, `diary_entries.json`).
+  * **`.dockerignore` Optimization:**
+    * Exclude `.venv`, `__pycache__`, `.git`, local `.env`, and auxiliary LaTeX build artifacts (`*.aux`, `*.fls`, `*.log`, `*.fdb_latexmk`).
+  * **Health Check & Cloud Run Readiness:**
+    * Native container health check (`curl -f http://localhost:8501/_stcore/health`).
+    * Configured for scale-to-zero serverless deployment on Google Cloud Run.
 
 ---
 
@@ -187,7 +194,7 @@ This document tracks all planned features, technical requirements, and architect
 ---
 
 ### Feature 13: Dynamic & Configurable Resume File Naming
-* **Status:** In Backlog
+* **Status:** Completed
 * **Objective:** Replace static download filenames (`new_id_resume.pdf`) with dynamic, ATS-optimized, and customizable file naming conventions.
 * **Core Capabilities:**
   * **Template Pattern Tokens:** Support customizable naming patterns such as:
@@ -223,16 +230,16 @@ This document tracks all planned features, technical requirements, and architect
 
 ## 🐛 Known Issues & Quality Enhancements
 
-### Issue 1: Workday Mode Generates Identical/Repetitive Resumes Across Different JDs
+### Issue 1: Workday Mode Generates Identical/Repetitive Resumes Across Different JDs [RESOLVED]
 * **Reported:** User observed that selecting **Workday** for different JDs consistently produces virtually identical resumes.
 * **Root Causes Identified:**
-  1. **Static Placeholder Companies:** `build_workday_prompt` lacks guidance on company naming or project domains. Without instruction, LLMs default to their most frequent training priors (`Tech Solutions Inc.` and `Cloud Systems Corp`).
-  2. **Verbatim JD Copying:** `build_workday_prompt` strictly mandates exact keyword mirroring, but omits the Google XYZ formula (`Accomplished [X], measured by [Y], by doing [Z]`). Consequently, the model simply copies the extracted JD responsibilities verbatim as bullet points into the same two dummy companies.
-  3. **Silent Failure & Stale File Masking:** In `deconstruct_jd.pipeline()`, exceptions during model calls are caught and printed to console without raising an exception to `app.py`. If a new generation fails or times out, `app.py` silently re-reads the old `new_resume.pdf` from the prior run and displays "Succeded".
-* **Remediation Plan:**
-  * **Dynamic Domain & Role Synthesis:** Instruct the Workday prompt to invent realistic, varied company names and projects that match the specific target industry (e.g., FinTech, E-commerce, Healthcare, Cloud SaaS) and target seniority.
-  * **Google XYZ Metric Fusion:** Incorporate the Google XYZ achievement formula into `build_workday_prompt` so keywords are embedded within quantified impact statements rather than raw copied phrases.
-  * **Artifact Purging & Error Propagation:** In `app.py` / `deconstruct_jd.py`, wipe existing `new_resume.pdf` before generation begins, and ensure API errors bubble up to display `st.error` in the UI rather than silently falling back to stale files.
+  1. **Static Placeholder Companies:** `build_workday_prompt` lacked guidance on company naming or project domains.
+  2. **Verbatim JD Copying:** `build_workday_prompt` lacked Google XYZ formula integration.
+  3. **Silent Failure & Stale File Masking:** `deconstruct_jd.pipeline()` swallowed exceptions without raising, allowing `app.py` to re-serve old PDFs.
+* **Resolution Completed:**
+  * Added `purge_generation_artifacts()` and `st.session_state` reset in `app.py`.
+  * Added strict negative prompt constraints forbidding placeholder companies (`Tech Solutions Inc.`, `Cloud Systems Corp`, `Acme Corp`).
+  * Propagated errors in `deconstruct_jd.pipeline()` with model failover and explicit `RuntimeError` checks in `app.py`.
 
 ---
 
@@ -271,5 +278,5 @@ Phase 7: Ecosystem Integrations (Feature 7)
 | **Backlog** | **Centralized Logging** | Structured file/console logging (`app.log`) and in-app diagnostics for end-to-end tracing. |
 | **Backlog** | **Truth / Anti-Lie Auditor** | Cross-verifies resume bullets against profile/diary to flag fabricated claims & hallucinations. |
 | **Backlog** | **UI / UX Modernization** | Live inline PDF viewer, drag-and-drop Kanban tracker, and modern responsive CSS theming. |
-| **Backlog** | **Dynamic Resume Naming** | Configurable token-based filenames (e.g. `{Name}_{Role}_{Company}_Resume.pdf`) and sanitization. |
+| **Completed** | **Dynamic Resume Naming** | Configurable token-based filenames (e.g. `{Name}_{Role}_{Company}_Resume.pdf`) and sanitization. |
 | **Backlog** | **Email Triage & Noise Filter** | Two-tier heuristic + LLM filter discarding job alert digests and promotional emails. |
